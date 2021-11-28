@@ -1,19 +1,12 @@
 #include <avr/io.h>
-#include "io.h"
 #include <avr/interrupt.h>
 #ifdef _SIMULATE_
 #include "simAVRHeader.h"
 #endif
 
-//create three states
-enum ThreeLEDsSM {start_three, led_0, led_1, led_2} ThreeLEDsstate;
-unsigned char threeLEDs = 0x00;
-
-enum BlinkingLEDSM {start_blinking, blink_on, blink_off} BlinkingLEDstate;
-unsigned char blinkingLED = 0x00;
-
-enum CombineLEDsSM {start_combine, Init} CombineLEDstate;
-
+unsigned char i = 0x00;
+unsigned char time = 0x06;
+enum States {Start, Init, WaterCheck, MakeCoffee, Done} state;
 volatile unsigned char TimerFlag = 0;
 unsigned long _avr_timer_M = 1;
 unsigned long _avr_timer_cntcurr = 0;
@@ -49,119 +42,81 @@ _avr_timer_M = M;
 _avr_timer_cntcurr = _avr_timer_M;
 }
 
-void Tick_Three(){
-        switch(ThreeLEDsstate){
-                case start_three:
-                        ThreeLEDsstate = led_0;
-                        break;
-                case led_0:
-                        ThreeLEDsstate = led_1;
-                        break;
-                case led_1:
-                        ThreeLEDsstate = led_2;
-                        break;
-                case led_2:
-                        ThreeLEDsstate = led_0;
-                        break;
-                default:
-                        ThreeLEDsstate = start_three;
-                        break;
-        }
+void Tick(){
+  switch(state){
+        case Start:
+                state = Init;
+                break;
+        case Init:
+                if((~PINA & 0x0F) == 0x01){
+                        state = WaterCheck;
+                }else{
+                        state = Init;
+                }
+                break;
+        case WaterCheck:
+                i = i + 1;
+                if(((i%2) == 0) && ((~PINA & 0x0F) == 0x02)){
+                        i = 0;
+                        state = MakeCoffee;
+                }
+                if(i>20 && ((~PINA & 0x0F)!= 0x02)){
+                        i = 0;
+                        state = Init;
+                }
+                break;
+        case MakeCoffee:
+                i = i + 1;
+                if(((~PINA & 0x0F) == 0x04) && (time < 0x06)){
+                        time = time + 1;
+                }else if (((~PINA & 0x0F) == 0x08) && (time > 0x02)){
+                        time = time - 1;
+                }
+                if(i >= 60){
+                        time = time - 1;
+                }
+                if(time == 0){
+                        state = Done;
+                }
+                break;
 
-        switch(ThreeLEDsstate){
-                case start_three:
-                        break;
-                case led_0:
-                        threeLEDs = 0x01;
-                        break;
-                case led_1:
-                        threeLEDs = 0x02;
-                        break;
-                case led_2:
-                        threeLEDs = 0x04;
-                        break;
-                default:
-                        break;
-        }
+        case Done:
+                i = i + 1;
+                if(i > 20){
+                        state = Init;
+                }
+                break;
+        default:
+                state = Start;
+                break;
+  }
+        
+  switch(state){
+        case Start:
+                break;
+        case Init:
+                PORTB = 0x00;
+                break;
+        case WaterCheck:
+                PORTB = 0x01;
+                break;
+        case MakeCoffee:
+                break;
+        case Done:
+                PORTB = 0x02;
+        default:
+                break;
+  }
 }
 
-void Tick_Blink(){
-        switch(BlinkingLEDstate){
-                case start_blinking:
-                        BlinkingLEDstate = blink_on;
-                        break;
-                case blink_on:
-                        BlinkingLEDstate = blink_off;
-                        break;
-                case blink_off:
-                        BlinkingLEDstate = blink_on;
-                        break;
-                default:
-                        BlinkingLEDstate = start_blinking;
-                        break;
-        }
-
-        switch(BlinkingLEDstate){
-                case start_blinking:
-                        break;
-                case blink_on:
-                        blinkingLED = 0x08;
-                        break;
-                case blink_off:
-                        blinkingLED = 0x00;
-                        break;
-                default:
-                        break;
-        }
-}
-
-void Tick_Combine(){
-        switch(CombineLEDstate){
-                case start_combine:
-                        CombineLEDstate = Init;
-                        break;
-                case Init:
-                        CombineLEDstate = Init;
-                        break;
-                default:
-                        break;
-        }
-
-        switch(CombineLEDstate){
-                case start_combine:
-                        break;
-                case Init:
-                        PORTB = ((threeLEDs)|(blinkingLED));
-                        break;
-                default:
-                        break;
-        }
-}
-
-int main(void){
-        DDRB = 0xFF; PORTB = 0x00;
-        unsigned long Three_Period = 0;
-        unsigned long Blink_Period = 0;
-        TimerSet(10);
-        TimerOn();
-
-        while(1){
-        //call all three tick functions
-        if(Three_Period >= 50){
-        Tick_Three();
-        Three_Period = 0;
-        }
-
-        if(Blink_Period >= 160){
-        Tick_Blink();
-        Blink_Period = 0;
-        }
-        Tick_Combine();
-
+int main(void) {
+    DDRA = 0x00; PORTA = 0xFF;
+    DDRB = 0xFF; PORTB = 0x00;
+    TimerSet(500);
+    TimerOn();
+    while (1) {
+        Tick();
         while(!TimerFlag);
         TimerFlag = 0;
-        Three_Period = Three_Period + 10;
-        Blink_Period = Blink_Period + 10;
-        }
-        return 1;
+    }
 }
