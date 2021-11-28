@@ -33,6 +33,18 @@ tests = [ {'description': 'PINA: 0x00 => PORTB: 0x00',
     },
 
     ]
+tests = [ {'description': 'This test will run first.',
+    'steps': [ {'inputs': [('PINA',0x00)], 'iterations': 1 } ],
+    'expected': [('PORTB',0x00)],
+    },
+    {'description': 'This test will run second.',
+    'steps': [ {'inputs': [('PIN', <val>)],'iterations': 1}, # Set PIN to val then run one iteration
+        {'inputs': [('PIN',<val>)], 'time': 300 }, # Set PIN to val then run 300 ms
+        {'inputs': [('PIN',<val>)], 'iterations': 1, 'expected': [('PORT',<val>)]},
+        {'inputs': [('PIN',<val>)], 'time': 600}, ],
+    'expected': [('PORT',<val>)],
+    },
+    ]
 
 
 # Optionally you can add a set of "watch" variables these need to be global or static and may need
